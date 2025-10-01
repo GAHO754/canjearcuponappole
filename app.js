@@ -23,14 +23,27 @@ const bannerSet = (kind, text)=>{
 const toast = (m)=>{ const t=$('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 2200); };
 const log = (...a)=>{ const line=a.map(x=>typeof x==='string'?x:JSON.stringify(x,null,2)).join(' '); debugBox.textContent+=line+'\n'; console.log('[VALIDAR]',...a); };
 
-// ===== Helpers =====
-function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
-async function waitForQrLib(maxMs=5000){
-  const start = Date.now();
-  while (typeof window.Html5Qrcode === 'undefined' && (Date.now()-start) < maxMs){
-    await sleep(100);
-  }
-  return typeof window.Html5Qrcode !== 'undefined';
+// ===== Helpers (loader QR) =====
+function loadScript(src){
+  return new Promise((resolve, reject)=>{
+    const s = document.createElement('script');
+    s.src = src;
+    s.async = false; // carga inmediata para garantizar disponibilidad
+    s.onload = ()=>resolve(true);
+    s.onerror = ()=>reject(new Error('no se pudo cargar ' + src));
+    document.head.appendChild(s);
+  });
+}
+async function ensureQrLib(){
+  if (window.Html5Qrcode) return true;           // 1) ya está cargado (local o CDN en index)
+  try {                                          // 2) intenta unpkg
+    await loadScript('https://unpkg.com/html5-qrcode@2.3.10/minified/html5-qrcode.min.js');
+  } catch {}
+  if (window.Html5Qrcode) return true;
+  try {                                          // 3) intenta jsDelivr
+    await loadScript('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/minified/html5-qrcode.min.js');
+  } catch {}
+  return !!window.Html5Qrcode;
 }
 
 // ===== Relleno UI =====
@@ -132,7 +145,7 @@ async function redeemTx(){
 
     $('r_status').textContent='canjeado';
     bannerSet('ok','Canje marcado como CANJEADO ✔');
-    try{ // beep corto
+    try{
       const ctx = new (window.AudioContext||window.webkitAudioContext)();
       const osc = ctx.createOscillator(), g=ctx.createGain();
       osc.connect(g); g.connect(ctx.destination);
@@ -175,7 +188,7 @@ async function listCameras(){
     if (!cams || !cams.length){ sel.innerHTML='<option>Sin cámaras</option>'; return; }
     for (const c of cams){
       const opt = document.createElement('option'); opt.value=c.id; opt.textContent=c.label||c.id; sel.appendChild(opt);
-    }
+      }
     const back = cams.find(c=>/back|rear|environment/i.test(c.label||'')) || cams[0];
     sel.value = back.id; currentDeviceId = back.id;
   }catch(e){
@@ -192,8 +205,9 @@ function httpsHint(){
 }
 async function startCamera(){
   httpsHint();
-  // Asegura que la librería esté lista
-  const ok = await waitForQrLib(8000);
+
+  // Garantiza que la librería esté disponible (local o CDNs)
+  const ok = await ensureQrLib();
   if (!ok){ bannerSet('err','No se cargó la librería del lector QR.'); return; }
 
   try{
@@ -219,7 +233,7 @@ function closeModal(){ const m=$('redeemModal'); m.classList.remove('is-open'); 
 // ===== Boot =====
 async function boot(){
   // Sesión anónima automática (no se muestra UI)
-  try{ await auth.signInAnonymously(); }catch(e){ /* si tus reglas exigen auth != null, esto lo satisface */ }
+  try{ await auth.signInAnonymously(); }catch(e){}
 
   // Listeners UI
   $('btnStart').onclick = startCamera;
@@ -276,8 +290,8 @@ async function boot(){
   });
 
   // Inicial
-  const ok = await waitForQrLib(8000);
-  if (!ok){ bannerSet('err','No se cargó la librería del lector QR. Revisa tu conexión/CDN.'); return; }
+  const ok = await ensureQrLib();
+  if (!ok){ bannerSet('err','No se cargó la librería del lector QR. Revisa conexión/CDNs.'); return; }
   await listCameras();
 }
 
