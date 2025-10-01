@@ -12,14 +12,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-
-  <!-- Tu configuración Firebase (debe ejecutar firebase.initializeApp({...})) -->
   <script src="firebase-config.js"></script>
 
-  <!-- Lector QR: LOCAL + fallbacks a 2 CDNs (sin defer) -->
-  <script src="./html5-qrcode.min.js"
-          onerror="(function(){var s=document.createElement('script');s.src='https://unpkg.com/html5-qrcode@2.3.10/minified/html5-qrcode.min.js';s.onerror=function(){var s2=document.createElement('script');s2.src='https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/minified/html5-qrcode.min.js';document.head.appendChild(s2);};document.head.appendChild(s);}())">
-  </script>
+  <!-- Lector QR: IMPORTANTE sin defer y antes de app.js -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.10/minified/html5-qrcode.min.js"></script>
 
   <!-- Tu app -->
   <script src="app.js" defer></script>
@@ -28,7 +24,6 @@
   <header class="top">
     <div class="top__wrap">
       <h1 class="top__title">Validar canje <span class="pill">Gerencia</span></h1>
-      <!-- sin UI de sesión -->
     </div>
   </header>
 
