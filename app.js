@@ -23,6 +23,16 @@ const bannerSet = (kind, text)=>{
 const toast = (m)=>{ const t=$('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 2200); };
 const log = (...a)=>{ const line=a.map(x=>typeof x==='string'?x:JSON.stringify(x,null,2)).join(' '); debugBox.textContent+=line+'\n'; console.log('[VALIDAR]',...a); };
 
+// ===== Helpers =====
+function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+async function waitForQrLib(maxMs=5000){
+  const start = Date.now();
+  while (typeof window.Html5Qrcode === 'undefined' && (Date.now()-start) < maxMs){
+    await sleep(100);
+  }
+  return typeof window.Html5Qrcode !== 'undefined';
+}
+
 // ===== Relleno UI =====
 function fill(o={}, d={}){
   $('r_uid').textContent    = o.uid || d.uid || '—';
@@ -116,7 +126,7 @@ async function redeemTx(){
       tx.update(ref,{
         status:'canjeado',
         redeemedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        redeemedBy: auth.currentUser ? (auth.currentUser.email || auth.currentUser.uid) : 'gerencia'
+        redeemedBy: (auth.currentUser && (auth.currentUser.email || auth.currentUser.uid)) || 'gerencia'
       });
     });
 
@@ -156,6 +166,10 @@ async function onScan(text){
 // ===== Cámara =====
 async function listCameras(){
   try{
+    // Pedimos permiso primero (Safari no da labels sin permiso)
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    stream.getTracks().forEach(t=>t.stop());
+
     const cams = await Html5Qrcode.getCameras();
     const sel = $('cameraSelect'); sel.innerHTML='';
     if (!cams || !cams.length){ sel.innerHTML='<option>Sin cámaras</option>'; return; }
@@ -164,7 +178,11 @@ async function listCameras(){
     }
     const back = cams.find(c=>/back|rear|environment/i.test(c.label||'')) || cams[0];
     sel.value = back.id; currentDeviceId = back.id;
-  }catch(e){ log('getCameras error:', e); }
+  }catch(e){
+    // Fallback: sin permisos, usa facingMode
+    const sel = $('cameraSelect'); sel.innerHTML='<option value="env">Cámara trasera</option>'; sel.value='env'; currentDeviceId='env';
+    log('listCameras fallback:', e);
+  }
 }
 function httpsHint(){
   if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)){
@@ -174,11 +192,18 @@ function httpsHint(){
 }
 async function startCamera(){
   httpsHint();
+  // Asegura que la librería esté lista
+  const ok = await waitForQrLib(8000);
+  if (!ok){ bannerSet('err','No se cargó la librería del lector QR.'); return; }
+
   try{
     if (qr){ try{ await qr.stop(); await qr.clear(); }catch{} }
     qr = new Html5Qrcode('reader');
-    const deviceId = $('cameraSelect').value || currentDeviceId || { facingMode:'environment' };
-    await qr.start(deviceId, { fps:10, qrbox:280, rememberLastUsedCamera:true }, onScan, ()=>{});
+
+    let source = $('cameraSelect').value || currentDeviceId;
+    if (!source || source === 'env') source = { facingMode:'environment' };
+
+    await qr.start(source, { fps:10, qrbox:280, rememberLastUsedCamera:true }, onScan, ()=>{});
     bannerSet('warn','Apunta la cámara al QR del cupón…');
   }catch(e){
     bannerSet('err','No fue posible iniciar la cámara: ' + e.message);
@@ -193,16 +218,12 @@ function closeModal(){ const m=$('redeemModal'); m.classList.remove('is-open'); 
 
 // ===== Boot =====
 async function boot(){
-  // Auth
-  auth.onAuthStateChanged(async (user)=>{
-    if (!user){ bannerSet('err','Necesitas iniciar sesión.'); $('whoami').textContent='(sin sesión)'; return; }
-    $('whoami').textContent = user.email || user.uid;
-    $('btnLogout').onclick = async ()=>{ try{ await auth.signOut(); location.reload(); }catch{} };
-  });
+  // Sesión anónima automática (no se muestra UI)
+  try{ await auth.signInAnonymously(); }catch(e){ /* si tus reglas exigen auth != null, esto lo satisface */ }
 
-  // UI events
+  // Listeners UI
   $('btnStart').onclick = startCamera;
-  $('btnStop').onclick = stopCamera;
+  $('btnStop').onclick  = stopCamera;
   $('btnTestCam').onclick = async ()=>{
     const msg = $('testCamMsg'); msg.textContent='Probando…';
     try{
@@ -211,7 +232,6 @@ async function boot(){
     }catch(e){ msg.textContent='❌ ' + (e.name||'Error'); }
   };
 
-  // ⬇️ LO QUE FALTABA: listeners
   $('fileScan').addEventListener('change', async (ev)=>{
     const file = ev.target.files && ev.target.files[0];
     if (!file) return;
@@ -234,7 +254,6 @@ async function boot(){
     if(!t){ bannerSet('warn','Pega el JSON del QR.'); return; }
     onScan(t);
   };
-
   $('btnValidarPorIds').onclick = async ()=>{
     const uid = $('uidInput').value.trim();
     const rid = $('ridInput').value.trim();
@@ -242,13 +261,11 @@ async function boot(){
     clearInfo(); bannerSet('warn','Validando cupón…');
     try{ await validate(uid, rid); }catch(e){ bannerSet('err','No se pudo validar.'); log('validate by ids error:', e); }
   };
-
   $('btnCopyId').onclick = async ()=>{
     const id = $('r_id').textContent.trim();
     if(!id || id==='—'){ toast('Nada que copiar'); return; }
     try{ await navigator.clipboard.writeText(id); toast('ID copiado'); }catch{ toast('No se pudo copiar el ID'); }
   };
-
   $('btnRedeem').onclick = openModal;
   $('btnConfirmRedeem').onclick = redeemTx;
   $('btnCancelRedeem').onclick = closeModal;
@@ -259,8 +276,9 @@ async function boot(){
   });
 
   // Inicial
+  const ok = await waitForQrLib(8000);
+  if (!ok){ bannerSet('err','No se cargó la librería del lector QR. Revisa tu conexión/CDN.'); return; }
   await listCameras();
-  try{ await startCamera(); }catch(e){ log('auto startCamera failed:', e); }
 }
 
 document.addEventListener('DOMContentLoaded', boot);
