@@ -23,26 +23,22 @@ const bannerSet = (kind, text)=>{
 const toast = (m)=>{ const t=$('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 2200); };
 const log = (...a)=>{ const line=a.map(x=>typeof x==='string'?x:JSON.stringify(x,null,2)).join(' '); debugBox.textContent+=line+'\n'; console.log('[VALIDAR]',...a); };
 
-// ===== Helpers (loader QR) =====
+// ===== Loader de html5-qrcode =====
 function loadScript(src){
   return new Promise((resolve, reject)=>{
     const s = document.createElement('script');
     s.src = src;
-    s.async = false; // carga inmediata para garantizar disponibilidad
+    s.async = false; // carga inmediata
     s.onload = ()=>resolve(true);
     s.onerror = ()=>reject(new Error('no se pudo cargar ' + src));
     document.head.appendChild(s);
   });
 }
 async function ensureQrLib(){
-  if (window.Html5Qrcode) return true;           // 1) ya está cargado (local o CDN en index)
-  try {                                          // 2) intenta unpkg
-    await loadScript('https://unpkg.com/html5-qrcode@2.3.10/minified/html5-qrcode.min.js');
-  } catch {}
+  if (window.Html5Qrcode) return true; // ya está (local en index.html)
+  try { await loadScript('https://unpkg.com/html5-qrcode@2.3.10/minified/html5-qrcode.min.js'); } catch {}
   if (window.Html5Qrcode) return true;
-  try {                                          // 3) intenta jsDelivr
-    await loadScript('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/minified/html5-qrcode.min.js');
-  } catch {}
+  try { await loadScript('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/minified/html5-qrcode.min.js'); } catch {}
   return !!window.Html5Qrcode;
 }
 
@@ -179,34 +175,44 @@ async function onScan(text){
 // ===== Cámara =====
 async function listCameras(){
   try{
-    // Pedimos permiso primero (Safari no da labels sin permiso)
+    // Pedimos permiso primero (Safari/iOS no da labels sin permiso)
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
     stream.getTracks().forEach(t=>t.stop());
 
     const cams = await Html5Qrcode.getCameras();
     const sel = $('cameraSelect'); sel.innerHTML='';
     if (!cams || !cams.length){ sel.innerHTML='<option>Sin cámaras</option>'; return; }
+
     for (const c of cams){
-      const opt = document.createElement('option'); opt.value=c.id; opt.textContent=c.label||c.id; sel.appendChild(opt);
-      }
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.label || c.id;
+      sel.appendChild(opt);
+    }
+    // Preferir trasera si existe
     const back = cams.find(c=>/back|rear|environment/i.test(c.label||'')) || cams[0];
-    sel.value = back.id; currentDeviceId = back.id;
+    sel.value = back.id;
+    currentDeviceId = back.id;
   }catch(e){
-    // Fallback: sin permisos, usa facingMode
-    const sel = $('cameraSelect'); sel.innerHTML='<option value="env">Cámara trasera</option>'; sel.value='env'; currentDeviceId='env';
+    // Fallback: sin permisos/labels, usa facingMode
+    const sel = $('cameraSelect');
+    sel.innerHTML = '<option value="env">Cámara trasera</option><option value="user">Cámara frontal</option>';
+    sel.value = 'env';
+    currentDeviceId = 'env';
     log('listCameras fallback:', e);
   }
 }
+
 function httpsHint(){
   if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)){
     $('envWarning').textContent = '⚠ Para usar la cámara: abre esta página con HTTPS (o en localhost).';
     $('envWarning').hidden = false;
   }else{ $('envWarning').hidden = true; }
 }
+
 async function startCamera(){
   httpsHint();
 
-  // Garantiza que la librería esté disponible (local o CDNs)
   const ok = await ensureQrLib();
   if (!ok){ bannerSet('err','No se cargó la librería del lector QR.'); return; }
 
@@ -214,8 +220,10 @@ async function startCamera(){
     if (qr){ try{ await qr.stop(); await qr.clear(); }catch{} }
     qr = new Html5Qrcode('reader');
 
+    // Fuente: lo elegido en el select (deviceId o facingMode)
     let source = $('cameraSelect').value || currentDeviceId;
-    if (!source || source === 'env') source = { facingMode:'environment' };
+    if (source === 'env') source = { facingMode:'environment' };
+    if (source === 'user') source = { facingMode:'user' };
 
     await qr.start(source, { fps:10, qrbox:280, rememberLastUsedCamera:true }, onScan, ()=>{});
     bannerSet('warn','Apunta la cámara al QR del cupón…');
@@ -238,6 +246,13 @@ async function boot(){
   // Listeners UI
   $('btnStart').onclick = startCamera;
   $('btnStop').onclick  = stopCamera;
+
+  // Cambiar cámara desde el selector
+  $('cameraSelect').addEventListener('change', async (ev)=>{
+    currentDeviceId = ev.target.value;
+    await startCamera();
+  });
+
   $('btnTestCam').onclick = async ()=>{
     const msg = $('testCamMsg'); msg.textContent='Probando…';
     try{
