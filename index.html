@@ -7,15 +7,19 @@
   <title>Validar canje — Gerencia</title>
   <link rel="icon" type="image/png" sizes="32x32" href="manzanas.png" />
   <link rel="stylesheet" href="app.css" />
+
   <!-- Firebase (compat 10.x) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" defer></script>
-  <!-- Tu config (debe llamar a firebase.initializeApp) -->
-  <script src="firebase-config.js" defer></script>
-  <!-- html5-qrcode desde CDN (evita 404 de rutas locales) -->
-  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/minified/html5-qrcode.min.js" defer></script>
-  <!-- App -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+  <!-- Tu configuración Firebase -->
+  <script src="firebase-config.js"></script>
+
+  <!-- Librería lector QR desde CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/minified/html5-qrcode.min.js"></script>
+
+  <!-- Tu lógica de validación -->
   <script src="app.js" defer></script>
 </head>
 <body class="bg">
