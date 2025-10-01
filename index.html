@@ -16,18 +16,12 @@
   <!-- Tu configuración Firebase (debe ejecutar firebase.initializeApp({...})) -->
   <script src="firebase-config.js"></script>
 
-  <!-- Lector QR: doble CDN y SIN defer para que cargue antes que app.js -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.10/minified/html5-qrcode.min.js"></script>
-  <script>
-    // Fallback por si unpkg falla
-    if (typeof window.Html5Qrcode === "undefined") {
-      var s = document.createElement("script");
-      s.src = "https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/minified/html5-qrcode.min.js";
-      document.head.appendChild(s);
-    }
+  <!-- Lector QR: LOCAL + fallbacks a 2 CDNs (sin defer) -->
+  <script src="./html5-qrcode.min.js"
+          onerror="(function(){var s=document.createElement('script');s.src='https://unpkg.com/html5-qrcode@2.3.10/minified/html5-qrcode.min.js';s.onerror=function(){var s2=document.createElement('script');s2.src='https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/minified/html5-qrcode.min.js';document.head.appendChild(s2);};document.head.appendChild(s);}())">
   </script>
 
-  <!-- Tu app (ya puede asumir que Html5Qrcode está cargado) -->
+  <!-- Tu app -->
   <script src="app.js" defer></script>
 </head>
 <body class="bg">
